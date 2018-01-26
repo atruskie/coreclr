@@ -3316,8 +3316,7 @@ Compiler::SwitchUniqueSuccSet Compiler::GetDescriptorForSwitch(BasicBlock* switc
         // Now we have a set of unique successors.
         unsigned numNonDups = BitVecOps::Count(&blockVecTraits, uniqueSuccBlocks);
 
-        typedef BasicBlock* BasicBlockPtr;
-        BasicBlockPtr*      nonDups = new (getAllocator()) BasicBlockPtr[numNonDups];
+        BasicBlock** nonDups = new (getAllocator()) BasicBlock*[numNonDups];
 
         unsigned nonDupInd = 0;
         // At this point, all unique targets are in "uniqueSuccBlocks".  As we encounter each,
@@ -3385,8 +3384,7 @@ void Compiler::SwitchUniqueSuccSet::UpdateTarget(CompAllocator* alloc,
     else if (fromStillPresent && !toAlreadyPresent)
     {
         // reallocate to add an entry
-        typedef BasicBlock* BasicBlockPtr;
-        BasicBlockPtr*      newNonDups = new (alloc) BasicBlockPtr[numDistinctSuccs + 1];
+        BasicBlock** newNonDups = new (alloc) BasicBlock*[numDistinctSuccs + 1];
         memcpy(newNonDups, nonDuplicates, numDistinctSuccs * sizeof(BasicBlock*));
         newNonDups[numDistinctSuccs] = to;
         numDistinctSuccs++;
@@ -5929,6 +5927,18 @@ void Compiler::fgFindBasicBlocks()
             // The lifetime of this var might expand multiple BBs. So it is a long lifetime compiler temp.
             lvaInlineeReturnSpillTemp                  = lvaGrabTemp(false DEBUGARG("Inline return value spill temp"));
             lvaTable[lvaInlineeReturnSpillTemp].lvType = info.compRetNativeType;
+
+            // If the method returns a ref class, set the class of the spill temp
+            // to the method's return value. We may update this later if it turns
+            // out we can prove the method returns a more specific type.
+            if (info.compRetType == TYP_REF)
+            {
+                CORINFO_CLASS_HANDLE retClassHnd = impInlineInfo->inlineCandidateInfo->methInfo.args.retTypeClass;
+                if (retClassHnd != nullptr)
+                {
+                    lvaSetClass(lvaInlineeReturnSpillTemp, retClassHnd);
+                }
+            }
         }
 
         return;
@@ -22077,22 +22087,8 @@ void Compiler::fgNoteNonInlineCandidate(GenTreeStmt* stmt, GenTreeCall* call)
         currentObservation = priorObservation;
     }
 
-    // Would like to just call noteFatal here, since this
-    // observation blocked candidacy, but policy comes into play
-    // here too.  Also note there's no need to re-report these
-    // failures, since we reported them during the initial
-    // candidate scan.
-    InlineImpact impact = InlGetImpact(currentObservation);
-
-    if (impact == InlineImpact::FATAL)
-    {
-        inlineResult.NoteFatal(currentObservation);
-    }
-    else
-    {
-        inlineResult.Note(currentObservation);
-    }
-
+    // Propagate the prior failure observation to this result.
+    inlineResult.NotePriorFailure(currentObservation);
     inlineResult.SetReported();
 
     if (call->gtCallType == CT_USER_FUNC)
@@ -22455,13 +22451,15 @@ void Compiler::fgInvokeInlineeCompiler(GenTreeCall* call, InlineResult* inlineRe
     memset(&inlineInfo, 0, sizeof(inlineInfo));
     CORINFO_METHOD_HANDLE fncHandle = call->gtCallMethHnd;
 
-    inlineInfo.fncHandle             = fncHandle;
-    inlineInfo.iciCall               = call;
-    inlineInfo.iciStmt               = fgMorphStmt;
-    inlineInfo.iciBlock              = compCurBB;
-    inlineInfo.thisDereferencedFirst = false;
-    inlineInfo.retExpr               = nullptr;
-    inlineInfo.inlineResult          = inlineResult;
+    inlineInfo.fncHandle              = fncHandle;
+    inlineInfo.iciCall                = call;
+    inlineInfo.iciStmt                = fgMorphStmt;
+    inlineInfo.iciBlock               = compCurBB;
+    inlineInfo.thisDereferencedFirst  = false;
+    inlineInfo.retExpr                = nullptr;
+    inlineInfo.retExprClassHnd        = nullptr;
+    inlineInfo.retExprClassHndIsExact = false;
+    inlineInfo.inlineResult           = inlineResult;
 #ifdef FEATURE_SIMD
     inlineInfo.hasSIMDTypeArgLocalOrReturn = false;
 #endif // FEATURE_SIMD

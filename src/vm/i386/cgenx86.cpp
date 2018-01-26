@@ -390,9 +390,11 @@ void HelperMethodFrame::UpdateRegDisplay(const PREGDISPLAY pRD)
         pRD->pCurrentContext->Eip = pRD->ControlPC = pUnwoundState->GetRetAddr();
         pRD->pCurrentContext->Esp = pRD->SP        = pUnwoundState->esp();
 
-#define CALLEE_SAVED_REGISTER(regname) pRD->pCurrentContext->regname = *((DWORD*) pUnwoundState->p##regname());
-        ENUM_CALLEE_SAVED_REGISTERS();
-#undef CALLEE_SAVED_REGISTER
+        // Do not use pUnwoundState->p##regname() here because it returns NULL in this case
+        pRD->pCurrentContext->Edi = pUnwoundState->_edi;
+        pRD->pCurrentContext->Esi = pUnwoundState->_esi;
+        pRD->pCurrentContext->Ebx = pUnwoundState->_ebx;
+        pRD->pCurrentContext->Ebp = pUnwoundState->_ebp;
 
 #define CALLEE_SAVED_REGISTER(regname) pRD->pCurrentContextPointers->regname = (DWORD*) pUnwoundState->p##regname();
         ENUM_CALLEE_SAVED_REGISTERS();
@@ -1614,7 +1616,12 @@ void UMEntryThunkCode::Poison()
 {
     LIMITED_METHOD_CONTRACT;
 
-    m_movEAX = X86_INSTR_INT3;
+    m_execstub = (BYTE*) ((BYTE*)UMEntryThunk::ReportViolation - (4+((BYTE*)&m_execstub)));
+
+    // mov ecx, imm32
+    m_movEAX = 0xb9;
+
+    ClrFlushInstructionCache(GetEntryPoint(),sizeof(UMEntryThunkCode));
 }
 
 UMEntryThunk* UMEntryThunk::Decode(LPVOID pCallback)

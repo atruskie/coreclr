@@ -841,6 +841,7 @@ void Compiler::raAssignVars()
                  varNum++)
             {
                 noway_assert(lvaTable[varNum].lvRefCnt == 0);
+                lvaTable[varNum].lvIsStructField = false;
             }
         }
         else
@@ -4610,7 +4611,7 @@ regMaskTP Compiler::rpPredictTreeRegUse(GenTreePtr   tree,
 
                 assert(!args->IsArgPlaceHolderNode()); // No place holders nodes are in gtCallLateArgs;
 
-                fgArgTabEntryPtr curArgTabEntry = gtArgEntryByNode(tree->AsCall(), args);
+                fgArgTabEntry* curArgTabEntry = gtArgEntryByNode(tree->AsCall(), args);
                 assert(curArgTabEntry);
 
                 regNumber regNum = curArgTabEntry->regNum; // first register use to pass this argument

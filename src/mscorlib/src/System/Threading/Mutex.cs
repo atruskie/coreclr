@@ -90,9 +90,9 @@ namespace System.Threading
 #if !PLATFORM_UNIX
         private static void VerifyNameForCreate(string name)
         {
-            if (name != null && (Path.MaxPath < name.Length))
+            if (name != null && (Interop.Kernel32.MAX_PATH < name.Length))
             {
-                throw new ArgumentException(SR.Format(SR.Argument_WaitHandleNameTooLong, Path.MaxPath), nameof(name));
+                throw new ArgumentException(SR.Format(SR.Argument_WaitHandleNameTooLong, name, Interop.Kernel32.MAX_PATH), nameof(name));
             }
         }
 #endif
@@ -100,9 +100,7 @@ namespace System.Threading
         private void CreateMutexCore(bool initiallyOwned, string name, out bool createdNew)
         {
 #if !PLATFORM_UNIX
-            Debug.Assert(name == null || name.Length <= Path.MaxPath);
-#else
-            Debug.Assert(name == null);
+            Debug.Assert(name == null || name.Length <= Interop.Kernel32.MAX_PATH);
 #endif
 
             uint mutexFlags = initiallyOwned ? Win32Native.CREATE_MUTEX_INITIAL_OWNER : 0;
@@ -116,7 +114,7 @@ namespace System.Threading
 #if PLATFORM_UNIX
                 if (errorCode == Interop.Errors.ERROR_FILENAME_EXCED_RANGE)
                     // On Unix, length validation is done by CoreCLR's PAL after converting to utf-8
-                    throw new ArgumentException(SR.Format(SR.Argument_WaitHandleNameTooLong, WaitHandleNameMax), nameof(name));
+                    throw new ArgumentException(SR.Format(SR.Argument_WaitHandleNameTooLong, name, WaitHandleNameMax), nameof(name));
 #endif
                 if (errorCode == Interop.Errors.ERROR_INVALID_HANDLE)
                     throw new WaitHandleCannotBeOpenedException(SR.Format(SR.Threading_WaitHandleCannotBeOpenedException_InvalidHandle, name));
@@ -158,7 +156,7 @@ namespace System.Threading
                 if (name != null && errorCode == Win32Native.ERROR_FILENAME_EXCED_RANGE)
                 {
                     // On Unix, length validation is done by CoreCLR's PAL after converting to utf-8
-                    throw new ArgumentException(SR.Format(SR.Argument_WaitHandleNameTooLong, WaitHandleNameMax), nameof(name));
+                    throw new ArgumentException(SR.Format(SR.Argument_WaitHandleNameTooLong, name, WaitHandleNameMax), nameof(name));
                 }
 #endif
                 if (Win32Native.ERROR_FILE_NOT_FOUND == errorCode || Win32Native.ERROR_INVALID_NAME == errorCode)
